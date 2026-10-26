@@ -1,0 +1,31 @@
+{
+  "id": "./?app=office",
+  "name": "INCA DSR",
+  "short_name": "INCA DSR",
+  "description": "รายงานยอดขายรายวัน สำหรับผู้บริหาร บัญชี และแอดมิน",
+  "lang": "th",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "../icons/office-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "../icons/office-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "../icons/office-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
