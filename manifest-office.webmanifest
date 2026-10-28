@@ -1,7 +1,7 @@
 {
   "id": "./office.html",
-  "name": "INCA DSR",
-  "short_name": "INCA DSR",
+  "name": "INCA Logistics",
+  "short_name": "INCA Logistics",
   "description": "รายงานยอดขายรายวัน สำหรับผู้บริหาร บัญชี และแอดมิน",
   "lang": "th",
   "start_url": "./office.html",
