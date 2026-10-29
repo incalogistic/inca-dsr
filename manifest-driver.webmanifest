@@ -1,0 +1,31 @@
+{
+  "id": "./driver.html",
+  "name": "INCA คนขับ",
+  "short_name": "INCA คนขับ",
+  "description": "งานส่งของสำหรับคนขับ หจก.อินคา โลจิสติก",
+  "lang": "th",
+  "start_url": "./driver.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a4fb8",
+  "theme_color": "#1a4fb8",
+  "icons": [
+    {
+      "src": "driver-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "driver-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "driver-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

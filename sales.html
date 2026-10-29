@@ -100,7 +100,7 @@
     <div class="card"><h2>ยังไม่ได้ตั้งค่าลิงก์ระบบ</h2><p>แอดมิน: เปิดไฟล์ <b>config.js</b> แล้ววางลิงก์ Web app (ลงท้ายด้วย <b>/exec</b>) จาก Apps Script → Deploy → Manage deployments</p></div>
   </section>
 
-  <iframe id="frame" title="INCA DSR เซลล์" allow="camera; clipboard-write" hidden></iframe>
+  <iframe id="frame" title="INCA DSR เซลล์" allow="camera; geolocation; clipboard-write" hidden></iframe>
 
 <script>
 (function () {
@@ -125,7 +125,7 @@
     var f = $('frame');
     f.hidden = false;
     f.onload = function () { loaded = true; clearTimeout(timer); setTimeout(hideSplash, Math.max(0, 900 - (Date.now() - t0))); };
-    f.src = url + (PAGE === 'sales' ? (url.indexOf('?') < 0 ? '?' : '&') + 'page=sales' : '');
+    f.src = url + (PAGE !== 'office' ? (url.indexOf('?') < 0 ? '?' : '&') + 'page=' + PAGE : '');
     timer = setTimeout(function () { if (!loaded) { $('offMsg').textContent = 'เชื่อมต่อช้ากว่าปกติ ตรวจสัญญาณอินเทอร์เน็ตแล้วกดลองใหม่'; hideSplash(); show('offline'); } }, 30000);
   }
   function guide() {
