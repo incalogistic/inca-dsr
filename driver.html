@@ -57,7 +57,7 @@
   <section class="screen" id="splash" aria-live="polite">
     <img class="logo" src="driver-512.png" alt="">
     <h1>INCA คนขับ</h1>
-    <p>งานส่งของ · ปิดงาน</p>
+    <p>สมุดใช้รถ · งานส่งของ</p>
     <div class="dots" aria-label="กำลังโหลด"><i></i><i></i><i></i></div>
     <div class="foot">หจก.อินคา โลจิสติก</div>
   </section>
@@ -73,7 +73,7 @@
       <ol class="steps" id="instIos" hidden>
         <li><span>แตะปุ่มแชร์ <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span> ด้านล่างของ Safari</span></li>
         <li><span>เลื่อนลงแล้วแตะ <b>"เพิ่มไปยังหน้าจอโฮม"</b> <span class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg></span></span></li>
-        <li><span>แตะ <b>"เพิ่ม"</b> มุมขวาบน ไอคอน <b>DSR เซลล์</b> จะอยู่บนหน้าจอ</span></li>
+        <li><span>แตะ <b>"เพิ่ม"</b> มุมขวาบน ไอคอน <b>INCA คนขับ</b> จะอยู่บนหน้าจอ</span></li>
       </ol>
       <ol class="steps" id="instOther" hidden>
         <li><span>แตะเมนู <b>⋮</b> มุมขวาบนของ Chrome</span></li>
@@ -101,6 +101,83 @@
   </section>
 
   <iframe id="frame" title="INCA คนขับ" allow="camera; geolocation; clipboard-write" hidden></iframe>
+
+<script>
+// ===== กล้องในแอป: ถ่ายรูปจากกล้องเท่านั้น แล้วประทับชื่อรูป / ทะเบียน / คนขับ / วันเวลา / พิกัด ลงบนรูป =====
+// ใช้ทั้งในหน้าแอปคนขับ และหน้าครอบแอป (driver.html บน GitHub) ซึ่งเปิดกล้องแทนเมื่อ Google ไม่อนุญาตกล้องในหน้าแอป
+var CAM_CSS = '.cam-ov{position:fixed;inset:0;z-index:2147483000;background:#000;display:flex;flex-direction:column;color:#fff;font-family:"IBM Plex Sans Thai","Sukhumvit Set","Noto Sans Thai",system-ui,sans-serif}' +
+  '.cam-ov video,.cam-ov img{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}' +
+  '.cam-top{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px}.cam-top b{flex:1;font-size:16px}' +
+  '.cam-x{width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;font-size:18px;cursor:pointer}' +
+  '.cam-gps{font-size:12.5px;opacity:.85;text-align:center;padding:6px 10px}' +
+  '.cam-bot{display:flex;justify-content:center;padding:10px 0 calc(22px + env(safe-area-inset-bottom,0px))}' +
+  '.cam-shot{width:76px;height:76px;border-radius:50%;border:5px solid #fff;background:#d9301f;cursor:pointer}.cam-shot:active{transform:scale(.94)}' +
+  '.cam-bot2{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 16px calc(22px + env(safe-area-inset-bottom,0px))}' +
+  '.cam-bot2 button{min-height:52px;border-radius:14px;border:0;font:inherit;font-size:16px;font-weight:700;cursor:pointer}.cam-re{background:rgba(255,255,255,.16);color:#fff}.cam-ok{background:#1f8a5b;color:#fff}' +
+  '.cam-wait{position:absolute;inset:0;display:grid;place-items:center;font-size:15px;opacity:.8;pointer-events:none}.cam-ov [hidden]{display:none!important}';
+function camErrMsg(e) {
+  var n = e && e.name || '';
+  if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return 'ยังไม่ได้อนุญาตให้แอปใช้กล้อง';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'ไม่พบกล้องในเครื่องนี้';
+  if (n === 'NotReadableError' || n === 'AbortError') return 'กล้องถูกแอปอื่นใช้อยู่ ปิดแอปอื่นแล้วลองใหม่';
+  return (e && e.message) || 'เปิดกล้องไม่ได้';
+}
+/** เปิดกล้องเต็มจอ → { url (jpeg dataURL), lat, lng } หรือ null ถ้ากดปิด · โยน error ถ้าเปิดกล้องไม่ได้ */
+function camUI(label, lines) {
+  return new Promise(function (resolve, reject) {
+    if (!document.getElementById('cam-css')) { var st = document.createElement('style'); st.id = 'cam-css'; st.textContent = CAM_CSS; document.head.appendChild(st); }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { var er = new Error('เครื่องนี้เปิดกล้องในแอปไม่ได้'); er.name = 'NoCamera'; return reject(er); }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (stream) {
+      var ov = document.createElement('div'); ov.className = 'cam-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'ถ่ายรูป');
+      ov.innerHTML = '<div class="cam-top"><button class="cam-x" aria-label="ปิดกล้อง">✕</button><b></b></div><div style="position:relative;flex:1;min-height:0;display:flex"><video playsinline muted autoplay></video><img alt="รูปที่ถ่าย" hidden><div class="cam-wait">กำลังเปิดกล้อง…</div></div>' +
+        '<div class="cam-gps">📍 กำลังหาตำแหน่ง…</div><div class="cam-bot"><button class="cam-shot" aria-label="ถ่ายรูป"></button></div><div class="cam-bot2" hidden><button class="cam-re">ถ่ายใหม่</button><button class="cam-ok">ใช้รูปนี้</button></div>';
+      document.body.appendChild(ov);
+      var q = function (s) { return ov.querySelector(s); }, video = q('video'), img = q('img'), gps = q('.cam-gps'), url = '', pos = null, wid = null, done = false;
+      q('.cam-top b').textContent = '📷 ' + label;
+      video.srcObject = stream; var ready = function () { q('.cam-wait').hidden = true; }; video.addEventListener('playing', ready); video.addEventListener('loadeddata', ready);
+      var p0 = video.play(); if (p0 && p0.catch) p0.catch(function () {});
+      if (navigator.geolocation) { try { wid = navigator.geolocation.watchPosition(function (p) { pos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }; gps.textContent = '📍 ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5) + ' (±' + pos.acc + ' ม.)'; },
+        function () { gps.textContent = '📍 ไม่มีสัญญาณ GPS (ถ่ายรูปได้ตามปกติ)'; }, { enableHighAccuracy: true, maximumAge: 30000, timeout: 20000 }); } catch (e) {} }
+      else gps.textContent = '';
+      var finish = function (r) { if (done) return; done = true; stream.getTracks().forEach(function (t) { t.stop(); }); if (wid != null) try { navigator.geolocation.clearWatch(wid); } catch (e) {} ov.remove(); resolve(r); };
+      q('.cam-x').addEventListener('click', function () { finish(null); });
+      q('.cam-shot').addEventListener('click', function () {
+        var vw = video.videoWidth, vh = video.videoHeight; if (!vw || !vh) return;
+        var k = Math.min(1, 1280 / Math.max(vw, vh)), W = Math.round(vw * k), H = Math.round(vh * k);
+        var c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d'); g.drawImage(video, 0, 0, W, H);
+        var d = new Date(), p2 = function (x) { return ('0' + x).slice(-2); };
+        var ts = p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + (d.getFullYear() + 543) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+        var L = [label].concat(lines || []).concat([ts, pos ? 'GPS ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5) + ' ±' + pos.acc + 'ม.' : 'GPS: ไม่มีสัญญาณ']);
+        var fs = Math.max(14, Math.round(W / 40)), lh = Math.round(fs * 1.35), bh = lh * L.length + fs;
+        g.fillStyle = 'rgba(0,0,0,.58)'; g.fillRect(0, H - bh, W, bh);
+        g.fillStyle = '#fff'; g.textBaseline = 'top';
+        L.forEach(function (t, i) { g.font = (i === 0 ? '700 ' : '400 ') + fs + 'px "IBM Plex Sans Thai","Noto Sans Thai",Tahoma,sans-serif'; g.fillText(String(t), Math.round(fs * 0.7), H - bh + Math.round(fs / 2) + i * lh, W - fs * 1.4); });
+        url = c.toDataURL('image/jpeg', 0.72); q('.cam-wait').hidden = true; img.src = url; img.hidden = false; video.hidden = true; q('.cam-bot').hidden = true; q('.cam-bot2').hidden = false;
+      });
+      q('.cam-re').addEventListener('click', function () { img.hidden = true; video.hidden = false; q('.cam-bot').hidden = false; q('.cam-bot2').hidden = true; });
+      q('.cam-ok').addEventListener('click', function () { finish({ url: url, lat: pos ? pos.lat : '', lng: pos ? pos.lng : '' }); });
+    }, reject);
+  });
+}
+
+/* สะพานกล้อง: Google ไม่ให้หน้าแอป (ใน script.google.com) เปิดกล้อง → หน้าแอปส่งคำขอมาที่หน้านี้ ให้เปิดกล้อง/หาตำแหน่งแทน แล้วส่งรูปกลับ */
+(function () {
+  var OK = /^https:\/\/([a-z0-9-]+\.)*(googleusercontent\.com|google\.com)$/;
+  window.addEventListener('message', function (e) {
+    var d = e.data; if (!d || typeof d !== 'object' || !d.inca || !e.source || !OK.test(e.origin)) return;
+    var reply = function (o) { try { e.source.postMessage(o, e.origin); } catch (x) {} };
+    if (d.inca === 'hello') reply({ inca: 'bridge', v: 1, cam: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia), geo: !!navigator.geolocation });
+    else if (d.inca === 'cam') camUI(String(d.label || 'รูปถ่าย').slice(0, 80), [].concat(d.lines || []).map(function (x) { return String(x).slice(0, 80); }).slice(0, 4)).then(
+      function (r) { reply(r ? { inca: 'camr', id: d.id, ok: true, url: r.url, lat: r.lat, lng: r.lng } : { inca: 'camr', id: d.id, cancel: true }); },
+      function (err) { reply({ inca: 'camr', id: d.id, error: camErrMsg(err) }); });
+    else if (d.inca === 'geo') {
+      if (!navigator.geolocation) return reply({ inca: 'geor', id: d.id });
+      navigator.geolocation.getCurrentPosition(function (p) { reply({ inca: 'geor', id: d.id, lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); },
+        function () { reply({ inca: 'geor', id: d.id }); }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+    }
+  });
+})();
+</script>
 
 <script>
 (function () {
