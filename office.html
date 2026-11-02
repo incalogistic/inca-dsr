@@ -88,6 +88,16 @@
     <div class="arrow" id="iosArrow" hidden aria-hidden="true">⬇</div>
   </section>
 
+  <!-- เปิดแอปในกรอบไม่ได้ (เช่น มือถือบางรุ่นที่ล็อกอิน Google หลายบัญชี หรือบล็อกคุกกี้) -->
+  <section class="screen" id="noframe" hidden>
+    <div class="card" style="text-align:center;align-items:center">
+      <div style="font-size:44px" aria-hidden="true">⚠️</div>
+      <h2>เปิดแอปในหน้านี้ไม่ได้</h2>
+      <p>มือถือบางเครื่องเปิดระบบของ Google ในกรอบนี้ไม่ได้ กด “เปิดแบบเต็มหน้า” เพื่อใช้งานต่อได้เลย</p>
+      <button class="btn" id="btnFull">เปิดแบบเต็มหน้า</button>
+      <button class="btn ghost" id="btnRetry2" style="margin-top:8px">ลองใหม่</button>
+    </div>
+  </section>
   <!-- 3) ไม่มีอินเทอร์เน็ต -->
   <section class="screen" id="offline" hidden>
     <div class="card" style="text-align:center;align-items:center">
@@ -113,8 +123,13 @@
   var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   var ua = navigator.userAgent, ios = /iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document), iosSafari = ios && !/CriOS|FxiOS|EdgiOS|Line\//i.test(ua);
   var skipKey = 'inca.skipInstall.' + PAGE, deferred = null;
-  var show = function (id) { ['install', 'offline', 'setup'].forEach(function (s) { $(s).hidden = s !== id; }); };
-  var t0 = Date.now(), loaded = false, timer = null;
+  var show = function (id) { ['install', 'offline', 'setup', 'noframe'].forEach(function (s) { $(s).hidden = s !== id; }); };
+  var t0 = Date.now(), loaded = false, timer = null, ready = false, rtimer = null, src = '';
+  // แอปข้างในส่งข้อความ 'ready' มาเมื่อเปิดสำเร็จ · ถ้าโหลดกรอบเสร็จแล้วยังไม่ได้ข้อความ = Google แสดงหน้าข้อผิดพลาดแทนแอป
+  window.addEventListener('message', function (e) {
+    if (!/^https:\/\/([a-z0-9-]+\.)*(googleusercontent|google)\.com$/.test(e.origin)) return;
+    if (e.data && e.data.inca === 'ready') { ready = true; clearTimeout(rtimer); }
+  });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; if (!$('install').hidden) { $('instAndroid').hidden = false; $('instOther').hidden = true; } });
@@ -127,8 +142,9 @@
     if (!navigator.onLine) { hideSplash(); show('offline'); return; }
     var f = $('frame');
     f.hidden = false;
-    f.onload = function () { loaded = true; clearTimeout(timer); setTimeout(hideSplash, Math.max(0, 900 - (Date.now() - t0))); };
-    f.src = url + (PAGE === 'sales' ? (url.indexOf('?') < 0 ? '?' : '&') + 'page=sales' : '');
+    f.onload = function () { loaded = true; clearTimeout(timer); setTimeout(hideSplash, Math.max(0, 900 - (Date.now() - t0)));
+      clearTimeout(rtimer); if (!ready) rtimer = setTimeout(function () { if (!ready) { hideSplash(); f.hidden = true; show('noframe'); } }, 8000); };
+    ready = false; f.src = src = url + (PAGE === 'sales' ? (url.indexOf('?') < 0 ? '?' : '&') + 'page=sales' : '');
     timer = setTimeout(function () { if (!loaded) { $('offMsg').textContent = 'เชื่อมต่อช้ากว่าปกติ ตรวจสัญญาณอินเทอร์เน็ตแล้วกดลองใหม่'; hideSplash(); show('offline'); } }, 30000);
   }
   function guide() {
@@ -144,6 +160,8 @@
   $('btnInstall').addEventListener('click', function () { if (!deferred) return; deferred.prompt(); deferred.userChoice.then(function (c) { deferred = null; if (c.outcome === 'accepted') { try { localStorage.setItem(skipKey, '1'); } catch (e) {} } }); });
   $('btnSkip').addEventListener('click', function () { try { localStorage.setItem(skipKey, '1'); } catch (e) {} $('splash').hidden = false; $('splash').classList.remove('fade'); t0 = Date.now(); start(); });
   $('btnRetry').addEventListener('click', function () { $('splash').hidden = false; $('splash').classList.remove('fade'); loaded = false; t0 = Date.now(); start(); });
+  $('btnFull').addEventListener('click', function () { location.href = src || url; });
+  $('btnRetry2').addEventListener('click', function () { $('splash').hidden = false; $('splash').classList.remove('fade'); loaded = false; t0 = Date.now(); start(); });
   window.addEventListener('online', function () { if (!$('offline').hidden) $('btnRetry').click(); });
   guide();
 })();
