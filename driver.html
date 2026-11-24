@@ -98,6 +98,15 @@
     </div>
   </section>
 
+  <section class="screen" id="noframe" hidden>
+    <div class="card" style="text-align:center;align-items:center">
+      <div style="font-size:44px" aria-hidden="true">⚠️</div>
+      <h2>เปิดแอปในหน้านี้ไม่ได้</h2>
+      <p>มือถือบางเครื่องเปิดระบบของ Google ในกรอบนี้ไม่ได้ กด “เปิดแบบเต็มหน้า” เพื่อใช้งานต่อได้เลย</p>
+      <button class="btn" id="btnFull">เปิดแบบเต็มหน้า</button>
+      <button class="btn ghost" id="btnRetry2" style="margin-top:8px">ลองใหม่</button>
+    </div>
+  </section>
   <!-- 4) ยังไม่ได้ใส่ลิงก์ระบบ (สำหรับแอดมินตอนติดตั้ง) -->
   <section class="screen" id="setup" hidden>
     <div class="card"><h2>ยังไม่ได้ตั้งค่าลิงก์ระบบ</h2><p>แอดมิน: เปิดไฟล์ <b>config.js</b> แล้ววางลิงก์ Web app (ลงท้ายด้วย <b>/exec</b>) จาก Apps Script → Deploy → Manage deployments</p></div>
@@ -107,7 +116,8 @@
 
 <script>
 // ===== กล้องในแอป: ถ่ายรูปจากกล้องเท่านั้น แล้วประทับชื่อรูป / ทะเบียน / คนขับ / วันเวลา / พิกัด ลงบนรูป =====
-// ใช้ทั้งในหน้าแอปคนขับ และหน้าครอบแอป (driver.html บน GitHub) ซึ่งเปิดกล้องแทนเมื่อ Google ไม่อนุญาตกล้องในหน้าแอป
+// ใช้ร่วมกัน: แอปคนขับ แอปเซลล์ และหน้าครอบแอป (driver.html / sales.html บน GitHub) ซึ่งเปิดกล้องแทนเมื่อ Google ไม่อนุญาตกล้องในหน้าแอป
+// (แก้ที่ /home/claude/dsr/cam_shared.js แล้วใส่ด้วย cam_inject.py)
 var CAM_CSS = '.cam-ov{position:fixed;inset:0;z-index:2147483000;background:#000;display:flex;flex-direction:column;color:#fff;font-family:"IBM Plex Sans Thai","Sukhumvit Set","Noto Sans Thai",system-ui,sans-serif}' +
   '.cam-ov video,.cam-ov img{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}' +
   '.cam-top{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px}.cam-top b{flex:1;font-size:16px}' +
@@ -122,8 +132,48 @@ function camErrMsg(e) {
   var n = e && e.name || '';
   if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return 'ยังไม่ได้อนุญาตให้แอปใช้กล้อง';
   if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'ไม่พบกล้องในเครื่องนี้';
+  if (n === 'OldPhoto') return e.message;
   if (n === 'NotReadableError' || n === 'AbortError') return 'กล้องถูกแอปอื่นใช้อยู่ ปิดแอปอื่นแล้วลองใหม่';
   return (e && e.message) || 'เปิดกล้องไม่ได้';
+}
+/** ประทับชื่อรูป / บรรทัดเพิ่ม / วันเวลา (พ.ศ.) / พิกัด ที่ขอบล่างของรูป */
+function camStamp(g, W, H, label, lines, pos) {
+  var d = new Date(), p2 = function (x) { return ('0' + x).slice(-2); };
+  var ts = p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + (d.getFullYear() + 543) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+  var L = [label].concat(lines || []).concat([ts, pos && pos.lat ? 'GPS ' + (+pos.lat).toFixed(5) + ', ' + (+pos.lng).toFixed(5) + (pos.acc ? ' ±' + pos.acc + 'ม.' : '') : 'GPS: ไม่มีสัญญาณ']);
+  var fs = Math.max(14, Math.round(W / 40)), lh = Math.round(fs * 1.35), bh = lh * L.length + fs;
+  g.fillStyle = 'rgba(0,0,0,.58)'; g.fillRect(0, H - bh, W, bh);
+  g.fillStyle = '#fff'; g.textBaseline = 'top';
+  L.forEach(function (t, i) { g.font = (i === 0 ? '700 ' : '400 ') + fs + 'px "IBM Plex Sans Thai","Noto Sans Thai",Tahoma,sans-serif'; g.fillText(String(t), Math.round(fs * 0.7), H - bh + Math.round(fs / 2) + i * lh, W - fs * 1.4); });
+}
+var CAM_FRESH_MS = 180000;   // รูปจากกล้องของเครื่องต้องเพิ่งถ่าย (ไม่เกิน 3 นาที) กันเลือกรูปเก่าจากอัลบั้ม
+/** สำรอง: เปิดกล้องของเครื่อง (input capture) → ตรวจว่าเพิ่งถ่าย → ประทับเวลา/พิกัด · ต้องเรียกจากการแตะปุ่มโดยตรง
+ *  posFn = ฟังก์ชันหาตำแหน่ง (คืน Promise {lat,lng,acc} หรือ null) → { url, lat, lng } หรือ null ถ้ากดยกเลิก */
+function camFile(label, lines, posFn) {
+  return new Promise(function (resolve, reject) {
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.setAttribute('capture', 'environment');
+    inp.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'; document.body.appendChild(inp);
+    var done = false, fin = function () { done = true; setTimeout(function () { inp.remove(); }, 0); };
+    window.addEventListener('focus', function onF() { window.removeEventListener('focus', onF); setTimeout(function () { if (!done && !(inp.files && inp.files.length)) { fin(); resolve(null); } }, 1500); });
+    inp.addEventListener('change', function () {
+      var f = inp.files && inp.files[0]; if (!f) { fin(); return resolve(null); }
+      fin();
+      if (f.lastModified && Date.now() - f.lastModified > CAM_FRESH_MS) { var e = new Error('ใช้รูปเก่าจากอัลบั้มไม่ได้ ต้องถ่ายใหม่จากกล้องตอนนี้'); e.name = 'OldPhoto'; return reject(e); }
+      var pp = posFn ? Promise.resolve(posFn()).catch(function () { return null; }) : Promise.resolve(null);
+      var url0 = URL.createObjectURL(f), im = new Image();
+      im.onload = function () {
+        pp.then(function (pos) {
+          var k = Math.min(1, 1280 / Math.max(im.naturalWidth, im.naturalHeight)), W = Math.round(im.naturalWidth * k), H = Math.round(im.naturalHeight * k);
+          var c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d'); g.drawImage(im, 0, 0, W, H);
+          camStamp(g, W, H, label, lines, pos); URL.revokeObjectURL(url0);
+          resolve({ url: c.toDataURL('image/jpeg', 0.72), lat: pos && pos.lat ? pos.lat : '', lng: pos && pos.lng ? pos.lng : '' });
+        });
+      };
+      im.onerror = function () { URL.revokeObjectURL(url0); reject(new Error('อ่านรูปไม่สำเร็จ ลองถ่ายใหม่')); };
+      im.src = url0;
+    });
+    inp.click();
+  });
 }
 /** เปิดกล้องเต็มจอ → { url (jpeg dataURL), lat, lng } หรือ null ถ้ากดปิด · โยน error ถ้าเปิดกล้องไม่ได้ */
 function camUI(label, lines) {
@@ -148,13 +198,7 @@ function camUI(label, lines) {
         var vw = video.videoWidth, vh = video.videoHeight; if (!vw || !vh) return;
         var k = Math.min(1, 1280 / Math.max(vw, vh)), W = Math.round(vw * k), H = Math.round(vh * k);
         var c = document.createElement('canvas'); c.width = W; c.height = H; var g = c.getContext('2d'); g.drawImage(video, 0, 0, W, H);
-        var d = new Date(), p2 = function (x) { return ('0' + x).slice(-2); };
-        var ts = p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + (d.getFullYear() + 543) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
-        var L = [label].concat(lines || []).concat([ts, pos ? 'GPS ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5) + ' ±' + pos.acc + 'ม.' : 'GPS: ไม่มีสัญญาณ']);
-        var fs = Math.max(14, Math.round(W / 40)), lh = Math.round(fs * 1.35), bh = lh * L.length + fs;
-        g.fillStyle = 'rgba(0,0,0,.58)'; g.fillRect(0, H - bh, W, bh);
-        g.fillStyle = '#fff'; g.textBaseline = 'top';
-        L.forEach(function (t, i) { g.font = (i === 0 ? '700 ' : '400 ') + fs + 'px "IBM Plex Sans Thai","Noto Sans Thai",Tahoma,sans-serif'; g.fillText(String(t), Math.round(fs * 0.7), H - bh + Math.round(fs / 2) + i * lh, W - fs * 1.4); });
+        camStamp(g, W, H, label, lines, pos);
         url = c.toDataURL('image/jpeg', 0.72); q('.cam-wait').hidden = true; img.src = url; img.hidden = false; video.hidden = true; q('.cam-bot').hidden = true; q('.cam-bot2').hidden = false;
       });
       q('.cam-re').addEventListener('click', function () { img.hidden = true; video.hidden = false; q('.cam-bot').hidden = false; q('.cam-bot2').hidden = true; });
@@ -190,8 +234,13 @@ function camUI(label, lines) {
   var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   var ua = navigator.userAgent, ios = /iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document), iosSafari = ios && !/CriOS|FxiOS|EdgiOS|Line\//i.test(ua);
   var skipKey = 'inca.skipInstall.' + PAGE, deferred = null;
-  var show = function (id) { ['install', 'offline', 'setup'].forEach(function (s) { $(s).hidden = s !== id; }); };
-  var t0 = Date.now(), loaded = false, timer = null;
+  var show = function (id) { ['install', 'offline', 'setup', 'noframe'].forEach(function (s) { $(s).hidden = s !== id; }); };
+  var t0 = Date.now(), loaded = false, timer = null, ready = false, rtimer = null, src = '';
+  // แอปข้างในส่งข้อความ 'ready' มาเมื่อเปิดสำเร็จ · ถ้าโหลดกรอบเสร็จแล้วยังไม่ได้ข้อความ = Google แสดงหน้าข้อผิดพลาดแทนแอป
+  window.addEventListener('message', function (e) {
+    if (!/^https:\/\/([a-z0-9-]+\.)*(googleusercontent|google)\.com$/.test(e.origin)) return;
+    if (e.data && e.data.inca === 'ready') { ready = true; clearTimeout(rtimer); }
+  });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; if (!$('install').hidden) { $('instAndroid').hidden = false; $('instOther').hidden = true; } });
@@ -204,8 +253,9 @@ function camUI(label, lines) {
     if (!navigator.onLine) { hideSplash(); show('offline'); return; }
     var f = $('frame');
     f.hidden = false;
-    f.onload = function () { loaded = true; clearTimeout(timer); setTimeout(hideSplash, Math.max(0, 900 - (Date.now() - t0))); };
-    f.src = url + (PAGE !== 'office' ? (url.indexOf('?') < 0 ? '?' : '&') + 'page=' + PAGE : '');
+    f.onload = function () { loaded = true; clearTimeout(timer); setTimeout(hideSplash, Math.max(0, 900 - (Date.now() - t0)));
+      clearTimeout(rtimer); if (!ready) rtimer = setTimeout(function () { if (!ready) { hideSplash(); f.hidden = true; show('noframe'); } }, 8000); };
+    ready = false; f.src = src = url + (PAGE !== 'office' ? (url.indexOf('?') < 0 ? '?' : '&') + 'page=' + PAGE : '');
     timer = setTimeout(function () { if (!loaded) { $('offMsg').textContent = 'เชื่อมต่อช้ากว่าปกติ ตรวจสัญญาณอินเทอร์เน็ตแล้วกดลองใหม่'; hideSplash(); show('offline'); } }, 30000);
   }
   function guide() {
@@ -221,6 +271,8 @@ function camUI(label, lines) {
   $('btnInstall').addEventListener('click', function () { if (!deferred) return; deferred.prompt(); deferred.userChoice.then(function (c) { deferred = null; if (c.outcome === 'accepted') { try { localStorage.setItem(skipKey, '1'); } catch (e) {} } }); });
   $('btnSkip').addEventListener('click', function () { try { localStorage.setItem(skipKey, '1'); } catch (e) {} $('splash').hidden = false; $('splash').classList.remove('fade'); t0 = Date.now(); start(); });
   $('btnRetry').addEventListener('click', function () { $('splash').hidden = false; $('splash').classList.remove('fade'); loaded = false; t0 = Date.now(); start(); });
+  $('btnFull').addEventListener('click', function () { location.href = src || url; });
+  $('btnRetry2').addEventListener('click', function () { $('splash').hidden = false; $('splash').classList.remove('fade'); loaded = false; t0 = Date.now(); start(); });
   window.addEventListener('online', function () { if (!$('offline').hidden) $('btnRetry').click(); });
   guide();
 })();
