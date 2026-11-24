@@ -9,7 +9,7 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#2b2c31",
-  "theme_color": "#2b2c31",
+  "theme_color": "#c8281c",
   "icons": [
     {
       "src": "sales-192.png",

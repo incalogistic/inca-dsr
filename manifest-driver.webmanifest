@@ -9,7 +9,7 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#1a4fb8",
-  "theme_color": "#1a4fb8",
+  "theme_color": "#1f3a68",
   "icons": [
     {
       "src": "driver-192.png",
